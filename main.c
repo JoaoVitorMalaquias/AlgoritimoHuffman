@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h> //para poder usar acento
-
+#include <windows.h>
 #define TAM 256
 
 typedef struct no {
@@ -300,45 +300,177 @@ char* decodificar (unsigned char texto[], No *raiz) {
     return decodificado;
 }
 
+//------------------------------ Parte 7: Compactar---------------------------
+void compactar(unsigned char str[]) {
+    //criamos um arquivo binario, e dentro dele vamos escrever em binario
+    FILE *arquivo = fopen("compactado.wg", "wb");
+    int i = 0, j=7; //o j comeca em 7 porque ele o primeiro binario tem que ser movido 7 vezes
+    unsigned char mascara, byte = 0;
+    if(arquivo) {
+        while(str[i]!= '\0')  {
+
+            mascara = 1;
+            //aqui vamos fazer manipulação bit a bit
+            if(str[i] == '1') {
+                mascara = mascara << j;
+                byte = byte | mascara; /*00000000
+                                         10000000 -> essa é a operacao OU
+                                         10000000 */
+
+            }
+            j--;
+            if(j<0) { //tem um byte formado já. Ou seja o ultimo 0
+                fwrite(&byte, sizeof(unsigned char), 1, arquivo); //escrever em arquivo binario
+                byte = 0; //começa tudo denovo
+                j = 7; //começa tudo denovo
+            }
+            i++;
+        }
+        if(j != 7) {
+            //significa que existe um byte me formação, ai escreve no arquivo
+            fwrite(&byte, sizeof(unsigned char), 1, arquivo); //escrever em arquivo binario
+        }
+        fclose(arquivo);
+    }
+    else {
+        printf("\nErro ao abrir/criar arquivo em compactar\n");
+    }
+}
+
+//------------------------------ Parte 8: Descompactar---------------------------
+unsigned int eh_bit_um(unsigned char byte, int i) {
+    unsigned char mascara = (1 << i);
+    return byte & mascara;
+}
+
+void descompactar(No *raiz) {
+    FILE *arquivo = fopen("compactado.wg", "rb"); //rb é leitura binaria
+    No *aux = raiz;
+    unsigned char byte;
+    int i;
+
+    if(arquivo) {
+        while(fread(&byte, sizeof(unsigned char), 1, arquivo)) {
+            for(i=7; i>=0; i--) {
+                if(eh_bit_um(byte, i)) {
+                    aux = aux->dir;
+                }
+                else {
+                    aux = aux->esq;
+                }
+                if(aux->esq == NULL && aux->dir == NULL) {
+                    printf("%c", aux->caracter);
+                    aux = raiz;
+                }
+
+            }
+        }
+        fclose(arquivo);
+    }
+    else {
+        printf("\nErro ao abrir/criar arquivo em descompactar\n");
+    }
+
+}
+
+int descobrir_tamanho() {
+    FILE *arq = fopen("teste.txt", "r");
+    int tam = 0;
+    if(arq) {
+        while(fgetc(arq) != -1) { //enquanto eu conseguir ler um caracter
+            tam++;
+        }
+        fclose(arq);
+    }
+    else{
+        printf("Erro ao abrir arquivo em descobrir tamanho");
+    }
+    return tam;
+}
+
+void ler_texto(unsigned char *texto) {
+    FILE *arq = fopen("teste.txt", "r");
+    char letra;
+    int i = 0;
+    if(arq) {
+        while (! feof(arq)) {//end of file. ou seja se chegou no fim do arquivo
+            letra = fgetc(arq);
+            if(letra != -1) {
+                texto[i] = letra;
+                i++;
+            }
+        }
+        fclose(arq);
+    }
+    else{
+        printf("Erro ao abrir arquivo em ler_texto");
+    }
+
+}
+
 int main(void) {
-    unsigned char texto[] = "Vamos aprender a programacao";
+    //unsigned char texto[] = "Vamos aprender a programacao";
+    unsigned char *texto;
     unsigned int tabela_frequencia[TAM];
     Lista lista;
     No *arvore;
-    int colunas;
+    int colunas, tam;
     char **dicionario;
     char *codificado;
     char *decodificado;
 
-    setlocale(LC_ALL, "Portuguese"); //para utilizar acentuação
+   SetConsoleOutputCP(65001); //para o que a acentuação fique certo.
+
+    tam = descobrir_tamanho();
+    printf("\nQuantidade: %d\n", tam);
+
+    texto = calloc(tam + 2, sizeof(unsigned char));
+    ler_texto(texto);
+    printf("\nTEXTO: %s\n", texto);
+
     //------------------------------ Parte 1: Tabela de Frenquencia---------------------------
     inicializa_tabela_com_zero(tabela_frequencia);
     preenche_tab_frequencia(texto, tabela_frequencia);
-    imprime_tab_frequencia(tabela_frequencia);
+    //imprime_tab_frequencia(tabela_frequencia);
 
     //------------------------------ Parte 2: Lista Encadeada Ordenada---------------------------
     criar_lista(&lista);
     preencher_lista(tabela_frequencia, &lista);
-    imprimir_lista(&lista);
+    //imprimir_lista(&lista);
 
     //------------------------------ Parte 3: Montar a árvore de Huffman---------------------------
     arvore = montar_arvore(&lista);
     printf("\n\tArvore de Huffman\n");
-    imprimir_arvore(arvore, 0); //tamanho igual a 0
+    //imprimir_arvore(arvore, 0); //tamanho igual a 0
 
     //------------------------------ Parte 4: Montar o dicionario---------------------------
     colunas = altura_arvore(arvore) + 1;
     dicionario = aloca_dicionario(colunas);
     gerar_dicionario(dicionario,arvore, "",colunas);
-    imprime_dicionario(dicionario);
+    //imprime_dicionario(dicionario);
 
     //------------------------------ Parte 5: Codificar---------------------------
     codificado = codificar(dicionario, texto);
-    printf("\n\tTexto Codificado: %s \n", codificado);
+    //printf("\n\tTexto Codificado: %s \n", codificado);
 
     //------------------------------ Parte 6: Descodificar---------------------------
     decodificado = decodificar(codificado, arvore); //codificado é o texto codificado.
-    printf("\n\tTexto decodificado: %s\n", decodificado);
+    //printf("\n\tTexto decodificado: %s\n", decodificado);
+
+
+    //------------------------------ Parte 7: Compactar---------------------------
+    compactar(codificado);
+
+
+    //------------------------------ Parte 8: Descompactar---------------------------
+    printf("\nARQUIVO DESCOMPACTADO\n");
+    descompactar(arvore);
+    printf("\n\n");
+
+    free(texto);
+    free(codificado);
+    free(decodificado);
+
 
     return 0;
 }
